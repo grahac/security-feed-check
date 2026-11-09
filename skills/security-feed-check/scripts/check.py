@@ -163,11 +163,11 @@ def git_show(repo, ref, path):
 
 
 def lock_versions(text):
-    """Compact 'name version;' list from a mix.lock or package-lock.json body (top-level npm packages only)."""
+    """Compact 'name version;' list from a mix.lock or package-lock.json body (npm: nested copies included, deduped)."""
     if text.lstrip().startswith("{"):
         pkgs = json.loads(text).get("packages", {})
-        return ";".join(f"{k[13:]} {v.get('version','?')}" for k, v in sorted(pkgs.items())
-                        if k.startswith("node_modules/") and "/node_modules/" not in k[13:])
+        found = {(k.rsplit("node_modules/", 1)[1], v.get("version", "?")) for k, v in pkgs.items() if "node_modules/" in k}
+        return ";".join(f"{n} {v}" for n, v in sorted(found))
     return ";".join(f"{n} {v}" for n, v in re.findall(r'^  "([a-z_0-9]+)": \{:hex, :[a-z_0-9]+, "([0-9][^"]*)"', text, re.M))
 
 

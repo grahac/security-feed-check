@@ -48,9 +48,11 @@ class CheckTest(unittest.TestCase):
     def test_lock_versions(self):
         mix = '%{\n  "bandit": {:hex, :bandit, "1.14.1", "abc", [:mix], [], "hexpm", "def"},\n}'
         npm = json.dumps({"packages": {"": {}, "node_modules/vite": {"version": "6.0.1"},
-                                       "node_modules/vite/node_modules/x": {"version": "1"}}})
+                                       "node_modules/vite/node_modules/@s/x": {"version": "1"},
+                                       "node_modules/y/node_modules/@s/x": {"version": "1"},
+                                       "node_modules/@s/x": {"version": "2"}}})
         self.assertEqual(check.lock_versions(mix), "bandit 1.14.1")
-        self.assertEqual(check.lock_versions(npm), "vite 6.0.1")
+        self.assertEqual(check.lock_versions(npm), "@s/x 1;@s/x 2;vite 6.0.1")  # nested copies kept, deduped
 
     def test_commit_then_rerun_reports_nothing_new(self):
         first = self.run_check(feeds([INC]), commit=True)
