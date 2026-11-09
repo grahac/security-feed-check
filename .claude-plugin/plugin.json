@@ -1,0 +1,18 @@
+{
+  "name": "security-feed-check",
+  "version": "0.1.0",
+  "description": "Daily vulnerability check: pwn.watch and Cloudflare Zero Wire against what you actually run, with safe, verified local updates.",
+  "author": {
+    "name": "Charlie Graham"
+  },
+  "repository": "https://github.com/grahac/security-feed-check",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "vulnerabilities",
+    "cve",
+    "pwn.watch",
+    "cloudflare",
+    "updates"
+  ]
+}
