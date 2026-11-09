@@ -7,7 +7,7 @@ It reads two vulnerability feeds, compares them with what is actually installed 
 - **[pwn.watch](https://pwn.watch)**: a broad incident feed with affected and fixed versions, filtered by your watchlist.
 - **[Cloudflare Radar Zero Wire](https://radar.cloudflare.com/security/zero-wire)**: a short, curated list of major threats. Every "Needs attention" item is checked.
 
-By default the agent also applies narrow local security updates when a verified vendor release fixes something you have installed: closed apps only, one package at a time, same major version, verified afterward. Set `"auto_update": false` for report-only. Production, running apps, databases, lockfiles and Git are always report-only; those go in the report for your approval.
+By default it only reports. Set `"auto_update": true` to let the agent also apply narrow local security updates when a verified vendor release fixes something you have installed: closed apps only, one package at a time, same major version, verified afterward. Production, running apps, databases, lockfiles and Git are always report-only; those go in the report for your approval.
 
 ## Install
 
@@ -50,7 +50,17 @@ Ask your agent: "run a security feed check". To run it every morning, use whatev
 0 7 * * * codex exec -c sandbox_workspace_write.network_access=true "run the security-feed-check skill"
 ```
 
-Unattended runs need permission to run the check script and your package manager; allow those in your tool's permission settings, or set `"auto_update": false` and allow just the script. Each run writes a report folder under `reports_dir` and ends with a short summary: what was updated, what needs your approval, and what is waiting on a vendor fix.
+Unattended runs need permission to run the check script; with `"auto_update": true` they also need your package manager. Allow those in your tool's permission settings. Each run writes a report folder under `reports_dir` and ends with a short summary: what was updated, what needs your approval, and what is waiting on a vendor fix.
+
+## What it covers
+
+Built for macOS. The inventory reads:
+
+- apps in `/Applications` and `~/Applications`, Homebrew formulae and casks, global npm packages for the active Node, and common runtimes
+- lockfiles: `package-lock.json` (v2 or later) and `mix.lock`. Any other lockfile (yarn, pnpm, poetry, Gemfile) prints `UNKNOWN`, not a package list.
+- deployed projects: each repo's origin default branch (`Dockerfile` plus lockfiles), and optionally Fly Postgres images
+
+On Linux the feed check, runtimes and lockfiles work; there is no app inventory. Anything it cannot read is reported as `UNKNOWN`, never as clean.
 
 ## How it decides
 

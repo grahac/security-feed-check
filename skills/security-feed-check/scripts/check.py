@@ -163,12 +163,16 @@ def git_show(repo, ref, path):
 
 
 def lock_versions(text):
-    """Compact 'name version;' list from a mix.lock or package-lock.json body (npm: nested copies included, deduped)."""
+    """Compact 'name version;' list from a mix.lock or package-lock.json body (npm: nested copies included, deduped).
+    Anything else, or a file with no packages read, is UNKNOWN so it never looks clean."""
     if text.lstrip().startswith("{"):
         pkgs = json.loads(text).get("packages", {})
         found = {(k.rsplit("node_modules/", 1)[1], v.get("version", "?")) for k, v in pkgs.items() if "node_modules/" in k}
-        return ";".join(f"{n} {v}" for n, v in sorted(found))
-    return ";".join(f"{n} {v}" for n, v in re.findall(r'^  "([a-z_0-9]+)": \{:hex, :[a-z_0-9]+, "([0-9][^"]*)"', text, re.M))
+    else:
+        found = set(re.findall(r'^  "([a-z_0-9]+)": \{:hex, :[a-z_0-9]+, "([0-9][^"]*)"', text, re.M))
+    if not found:
+        return "UNKNOWN (no packages read; only package-lock.json v2+ and mix.lock are supported)"
+    return ";".join(f"{n} {v}" for n, v in sorted(found))
 
 
 def inventory():

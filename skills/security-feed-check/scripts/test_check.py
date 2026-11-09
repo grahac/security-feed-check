@@ -53,6 +53,9 @@ class CheckTest(unittest.TestCase):
                                        "node_modules/@s/x": {"version": "2"}}})
         self.assertEqual(check.lock_versions(mix), "bandit 1.14.1")
         self.assertEqual(check.lock_versions(npm), "@s/x 1;@s/x 2;vite 6.0.1")  # nested copies kept, deduped
+        # unreadable formats must say UNKNOWN, never print an empty (clean-looking) list
+        self.assertTrue(check.lock_versions('vite@^6:\n  version "6.0.1"\n').startswith("UNKNOWN"))  # yarn.lock
+        self.assertTrue(check.lock_versions('{"lockfileVersion": 1, "dependencies": {}}').startswith("UNKNOWN"))
 
     def test_commit_then_rerun_reports_nothing_new(self):
         first = self.run_check(feeds([INC]), commit=True)
