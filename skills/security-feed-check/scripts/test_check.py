@@ -1,5 +1,5 @@
 """Run: python3 -B scripts/test_check.py  (stdlib only, no network; -B avoids writing __pycache__)."""
-import contextlib, io, json, os, sys, tempfile, unittest
+import contextlib, io, json, os, subprocess, sys, tempfile, unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check
@@ -67,6 +67,40 @@ class CheckTest(unittest.TestCase):
             self.run_check(feeds([]))
         with self.assertRaises(SystemExit):
             self.run_check(feeds([INC], rss="<rss><channel></channel></rss>"))
+
+    def test_feed_failure_is_coverage_lost(self):
+        def down(url):
+            raise OSError("network down")
+        with self.assertRaises(SystemExit) as cm:
+            self.run_check(down)
+        self.assertIn("COVERAGE LOST: pwn.watch", str(cm.exception.code))
+        with self.assertRaises(SystemExit) as cm:
+            self.run_check(feeds([INC], rss="<rss><unclosed>"))
+        self.assertIn("COVERAGE LOST: Zero Wire", str(cm.exception.code))
+        self.assertFalse(os.path.exists(check.SEEN))
+
+    def test_unedited_example_watchlist_is_flagged(self):
+        self.assertNotIn("EXAMPLE WATCHLIST", self.run_check(feeds([INC])))
+        json.dump(json.load(open(check.EXAMPLE)), open(check.WATCHLIST, "w"))
+        self.assertIn("EXAMPLE WATCHLIST", self.run_check(feeds([INC])))
+
+
+class ProbeTest(unittest.TestCase):
+    def test_run_reports_failures_as_unknown(self):
+        self.assertEqual(check.run(["sh", "-c", "echo ok"]), "ok")
+        self.assertTrue(check.run(["no-such-binary-xyz"]).startswith("UNKNOWN (not on PATH"))
+        self.assertEqual(check.run(["sh", "-c", "echo oops >&2; exit 3"]), "UNKNOWN (exit 3: oops)")
+
+    def test_git_show_separates_missing_file_from_git_failure(self):
+        repo = tempfile.mkdtemp()
+        git = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True)
+        git("init", "-q")
+        open(os.path.join(repo, "mix.lock"), "w").write("x")
+        git("add", "mix.lock")
+        git("-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "x")
+        self.assertEqual(check.git_show(repo, "HEAD", "mix.lock"), "x")
+        self.assertIsNone(check.git_show(repo, "HEAD", "Dockerfile"))
+        self.assertTrue(check.git_show(repo, "no-such-ref", "Dockerfile").startswith("UNKNOWN"))
 
 
 if __name__ == "__main__":
