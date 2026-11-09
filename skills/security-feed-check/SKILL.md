@@ -37,6 +37,7 @@ python3 -I <skill>/scripts/check.py inventory
 ```
 
 - If a feed or inventory command fails, or prints `COVERAGE LOST` or `UNKNOWN`, report the exact error and which coverage is missing. Never call the check clean.
+- If the check prints `EXAMPLE WATCHLIST`, say under Coverage / errors that pwn.watch coverage is the generic example, not the user's stack, and ask them to add what they run.
 - Inventory probes are best-effort. Missing output means UNKNOWN, not safe.
 - `deployed_projects` reads each repo's origin default branch. That is evidence of what *should* be deployed, not proof of what *is*. Before recommending a redeploy, check the running image or the installed component version on the host with read-only commands. Never start, stop, restart, update or deploy anything in production.
 - For every candidate finding, verify the installed product and version against the **primary vendor advisory** and the current official release. No vendor fix, or not enough evidence it applies, means report-only.

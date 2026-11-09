@@ -29,6 +29,23 @@ def fetch_raw(url):
         return r.read()
 
 
+EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "watchlist.example.json")
+
+
+def is_example(wl):
+    """True while tags and keywords are still the shipped example's: coverage is generic, not this user's."""
+    ex = json.load(open(EXAMPLE))
+    return sorted(wl["tags"]) == sorted(ex["tags"]) and sorted(wl["keywords"]) == sorted(ex["keywords"])
+
+
+def fetch_feed(name, load):
+    """Run a feed fetch+parse; any network or parse failure ends the run with the documented marker."""
+    try:
+        return load()
+    except (OSError, ValueError, KeyError, ET.ParseError) as e:
+        sys.exit(f"COVERAGE LOST: {name} fetch/parse failed ({e}). Do not treat this run as clean.")
+
+
 def load_watchlist():
     if not os.path.exists(WATCHLIST):
         sys.exit(f"No watchlist at {WATCHLIST}. Copy assets/watchlist.example.json there and edit it.")
@@ -76,7 +93,7 @@ def check(all_live, commit):
     wl = load_watchlist()
     watch = {"tags": {t.lower() for t in wl["tags"]}, "keywords": [k.lower() for k in wl["keywords"]]}
     seen = json.load(open(SEEN)) if os.path.exists(SEEN) else {}
-    data = json.loads(fetch_raw(INCIDENTS_URL))
+    data = fetch_feed("pwn.watch", lambda: json.loads(fetch_raw(INCIDENTS_URL)))
     incidents = [i for i in data["incidents"] if not i.get("isExample")]
     if not incidents:
         sys.exit("COVERAGE LOST: pwn.watch returned 0 incidents. Do not treat this run as clean.")
@@ -85,6 +102,9 @@ def check(all_live, commit):
     new = [i for i in matched if seen.get(i["slug"]) != i["updatedAt"]]
 
     print(f"# Security feed check {date.today().isoformat()}")
+    if is_example(wl):
+        print("EXAMPLE WATCHLIST: tags and keywords are the unedited example, so pwn.watch coverage is generic, "
+              "not this machine's stack. Add what you run to the watchlist.")
     print(f"pwn.watch feed updated {data['updatedAt'][:16]}Z · {len(incidents)} incidents · "
           f"{len(matched)} match watchlist · {len(live)} live · {len(new)} new/updated since last run\n")
     print("## pwn.watch: new or updated matches" + (" (first run: everything counts as new)" if not seen else ""))
@@ -93,7 +113,7 @@ def check(all_live, commit):
         print("\n## pwn.watch: all live matches")
         print("\n".join(fmt(i) for i in live) if live else "- none")
 
-    zw, total = zero_wire()
+    zw, total = fetch_feed("Zero Wire", zero_wire)
     if not total:
         sys.exit("COVERAGE LOST: Zero Wire feed parsed 0 items. Do not treat this run as clean.")
     print(f"\n## Cloudflare Zero Wire: needs attention ({len(zw)} of {total} items; "
@@ -132,6 +152,14 @@ def run(argv):
     if r.returncode != 0:
         return f"UNKNOWN (exit {r.returncode}: {r.stderr.strip()[:200]})"
     return r.stdout.strip()
+
+
+def git_show(repo, ref, path):
+    """File contents at ref, None if the file is not in that ref, or an UNKNOWN line if git itself failed."""
+    out = run(["git", "-C", repo, "show", f"{ref}:{path}"])
+    if out.startswith("UNKNOWN") and ("does not exist in" in out or "but not in '" in out):
+        return None
+    return out
 
 
 def lock_versions(text):
@@ -174,13 +202,13 @@ def inventory():
             print("fetch:", fetch)
         if ref.startswith("UNKNOWN"):
             continue
-        dockerfile = run(["git", "-C", repo, "show", f"{ref}:Dockerfile"])
-        print("image:", "no Dockerfile" if dockerfile.startswith("UNKNOWN") else
+        dockerfile = git_show(repo, ref, "Dockerfile")
+        print("image:", "no Dockerfile" if dockerfile is None else dockerfile if dockerfile.startswith("UNKNOWN") else
               ";".join(l for l in dockerfile.splitlines() if re.match(r"(ARG [A-Z_]*VERSION|FROM)", l)))
         for lock in ("mix.lock", "package-lock.json", "assets/package-lock.json"):
-            body = run(["git", "-C", repo, "show", f"{ref}:{lock}"])
-            if not body.startswith("UNKNOWN"):
-                print(f"{lock}:", lock_versions(body))
+            body = git_show(repo, ref, lock)
+            if body is not None:
+                print(f"{lock}:", body if body.startswith("UNKNOWN") else lock_versions(body))
 
     for app in wl.get("fly_postgres_apps", []):
         out = run(["fly", "machines", "list", "-a", app, "--json"])
