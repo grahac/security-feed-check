@@ -1,0 +1,16 @@
+{
+  "name": "security-feed-check",
+  "owner": {
+    "name": "Charlie Graham"
+  },
+  "metadata": {
+    "description": "Daily vulnerability check for Claude Code: pwn.watch + Cloudflare Zero Wire against what you actually run."
+  },
+  "plugins": [
+    {
+      "name": "security-feed-check",
+      "source": "./",
+      "description": "Daily vulnerability check: pwn.watch and Cloudflare Zero Wire against what you actually run, with safe, verified local updates."
+    }
+  ]
+}
