@@ -2,6 +2,8 @@
   "_doc": "Copy to ~/.config/security-feed-check/watchlist.json and add what you run (add the \"linux\" tag if you run Linux hosts yourself; Zero Wire already covers major kernel issues). 'tags' are pwn.watch tag ids (https://pwn.watch/tags.json); 'keywords' are whole-word, case-insensitive matches against each pwn.watch incident's product and title. Zero Wire items are never filtered.",
   "auto_update": false,
   "_auto_update_doc": "false (default): report only. true: the agent may also apply the narrow local updates described in SKILL.md.",
+  "notify": true,
+  "_notify_doc": "true: post one local desktop notification with a one-line summary at the end of each run (macOS: osascript; Linux: notify-send). false: no notification; read the report folder.",
   "reports_dir": "~/security-feed-check-runs",
   "tags": [
     "supply-chain",

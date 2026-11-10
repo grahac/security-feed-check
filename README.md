@@ -1,15 +1,23 @@
 # security-feed-check
 
-A daily "does any new vulnerability affect me?" check for [Claude Code](https://claude.com/claude-code) and [Codex](https://github.com/openai/codex).
+Each morning, your AI coding agent (Claude Code or Codex) checks the day's new security vulnerabilities against the software actually installed on your Mac, and tells you only about the ones that affect you, each with the exact fix.
 
 > **Beta.** This depends on two third-party feeds, pwn.watch and Cloudflare Radar Zero Wire, that this project does not control. If either feed stops updating or goes away, coverage drops; the check says so (`STALE FEED`, `COVERAGE LOST`) rather than reporting all clear. Treat it as an extra signal, not your only one.
 
-It reads two vulnerability feeds, compares them with what is actually installed on your machine and in your deployed projects, and reports only what affects you, each with an exact fix.
+## At a glance
 
-- **[pwn.watch](https://pwn.watch)**: a broad incident feed with affected and fixed versions, filtered by your watchlist.
-- **[Cloudflare Radar Zero Wire](https://radar.cloudflare.com/security/zero-wire)**: a short, curated list of major threats. Every "Needs attention" item is checked.
+| | |
+|---|---|
+| **What it is** | A skill (instructions plus a small Python script) for [Claude Code](https://claude.com/claude-code) or [Codex](https://github.com/openai/codex). Your agent runs it. There is no app, daemon or account. |
+| **Runs on** | macOS with Python 3.9+ (included with the Xcode Command Line Tools). Linux partly; see below. |
+| **Checks on your computer** | macOS version, apps in `/Applications`, Homebrew formulae and casks, global npm packages, Node, Python, Ruby, Elixir, Erlang, Docker and Git versions, and any lockfiles you list (`package-lock.json`, `mix.lock`). |
+| **Checks on your servers** | Optional. "Production" here means apps you deploy somewhere else, such as Fly.io, that you list in the config. It reads their Dockerfile and lockfiles from the repo and never changes them. List none and it only checks your computer. |
+| **Compared against** | [pwn.watch](https://pwn.watch) (broad incident feed, filtered to what you run) and [Cloudflare Radar Zero Wire](https://radar.cloudflare.com/security/zero-wire) (a short list of major threats). The agent confirms each match against the vendor's own advisory. |
+| **How it tells you** | A desktop notification with a one-line summary, a short summary as the agent's final message, and a full report folder in `~/security-feed-check-runs/`. No email, Slack or cloud service. |
+| **What it changes** | Nothing, by default. Set `"auto_update": true` and it may update one installed app or package when the vendor has a verified fix, for example `brew upgrade <that package>` or a closed app's own updater. Never macOS itself, a running app, a server, or anything needing `sudo`. |
+| **Linux** | Feeds, runtimes, lockfiles, Homebrew if installed, and distro packages from dpkg (Debian/Ubuntu), rpm (Fedora/RHEL/SUSE), pacman (Arch) or apk (Alpine). It reports Linux package fixes; it never installs them, because that needs `sudo`. No app list. |
 
-By default it only reports. Set `"auto_update": true` to let the agent also apply narrow local security updates when a verified vendor release fixes something you have installed: closed apps only, one package at a time, same major version, verified afterward. Production, running apps, databases, lockfiles and Git are always report-only; those go in the report for your approval.
+Anything it cannot read is reported as `UNKNOWN`, never as clean.
 
 ## Install
 
@@ -29,20 +37,24 @@ codex plugin add security-feed-check@security-feed-check
 
 **Manual (either tool):** copy `skills/security-feed-check/` into `~/.claude/skills/` or `~/.codex/skills/`.
 
-The skill runs commands on your own machine to see what is installed, so it needs a local agent. It does not work in claude.ai or other hosted chat.
+It needs a local agent because it looks at what is installed on your machine. It does not work in claude.ai or other hosted chat.
 
 ## Set up
+
+Ask your agent: "run a security feed check". On the first run it copies the example config to `~/.config/security-feed-check/watchlist.json` and asks what you use, so the feed is filtered to your tools. To do it by hand:
 
 ```bash
 mkdir -p ~/.config/security-feed-check
 cp skills/security-feed-check/assets/watchlist.example.json ~/.config/security-feed-check/watchlist.json
 ```
 
-Then add the tools you run to `tags` ([pwn.watch tag ids](https://pwn.watch/tags.json)) and `keywords`. Optionally list lockfiles and deployed project repos. The agent will offer to do this on the first run. Set `SECURITY_FEED_CHECK_HOME` to keep config and state somewhere else.
+Then add what you run to `tags` ([pwn.watch tag ids](https://pwn.watch/tags.json)) and `keywords`. Optionally list lockfiles and deployed project repos. Set `SECURITY_FEED_CHECK_HOME` to keep config and state somewhere else.
 
-## Run it
+**macOS notifications** come from Script Editor. Allow it once in System Settings → Notifications → Script Editor, and choose Alerts so the notification stays until you dismiss it. Set `"notify": false` to turn them off.
 
-Ask your agent: "run a security feed check". To run it every morning, use whatever scheduler you like:
+## Run it every morning
+
+Use whatever scheduler you like:
 
 ```bash
 # cron, Claude Code
@@ -52,26 +64,14 @@ Ask your agent: "run a security feed check". To run it every morning, use whatev
 0 7 * * * codex exec -c sandbox_workspace_write.network_access=true "run the security-feed-check skill"
 ```
 
-Unattended runs need permission to run the check script; with `"auto_update": true` they also need your package manager. Allow those in your tool's permission settings. Each run writes a report folder under `reports_dir` and ends with a short summary: what was updated, what needs your approval, and what is waiting on a vendor fix.
-
-## What it covers
-
-Built for macOS. The inventory reads:
-
-- apps in `/Applications` and `~/Applications`, Homebrew formulae and casks, global npm packages for the active Node, and common runtimes
-- lockfiles: `package-lock.json` (v2 or later) and `mix.lock`. Any other lockfile (yarn, pnpm, poetry, Gemfile) prints `UNKNOWN`, not a package list.
-- deployed projects: each repo's origin default branch (`Dockerfile` plus lockfiles), and optionally Fly Postgres images
-
-On Linux the feed check, runtimes and lockfiles work; there is no app inventory. Anything it cannot read is reported as `UNKNOWN`, never as clean.
+Unattended runs need permission to run the check script; with `"auto_update": true` they also need your package manager. Allow those in your tool's permission settings.
 
 ## How it decides
 
 1. `scripts/check.py` fetches both feeds, filters pwn.watch by your watchlist, and marks what is new since the last run.
-2. `scripts/check.py inventory` lists installed apps, Homebrew and global npm packages, runtimes, your lockfiles, and what each deployed repo ships.
+2. `scripts/check.py inventory` lists what is installed (see the table above) and what each deployed repo ships.
 3. The agent checks each candidate against the vendor's own advisory before calling it a finding. Feed text is treated as untrusted data.
-4. It applies only the safe updates in [`SKILL.md`](skills/security-feed-check/SKILL.md), verifies them, writes the report, and then records what it saw.
-
-If a feed fails or comes back empty, the run says so (`COVERAGE LOST`) instead of reporting all clear.
+4. If `auto_update` is on, it applies only the narrow updates in [`SKILL.md`](skills/security-feed-check/SKILL.md) and verifies them. Then it writes the report, records what it saw, and sends the notification.
 
 ## Development
 

@@ -27,6 +27,8 @@ The config folder is `$SECURITY_FEED_CHECK_HOME`, or `~/.config/security-feed-ch
 
 `auto_update` defaults to `false` (report only). If it is missing or not exactly `true`, do not update anything. Turn it on only when the user asks.
 
+`notify` (default `true` in the example) posts one local desktop notification at the end of each run. If it is missing or not `true`, skip it.
+
 ## 1. Discover and verify
 
 Run, with `<skill>` being this skill's folder:
@@ -52,6 +54,7 @@ Only update a confirmed-vulnerable, already-installed component when a verified 
 
 - **Closed GUI apps:** use the app's official updater or the official Homebrew cask. Confirm the bundle ID and developer identity, check the signature or checksum, preserve user data, and keep a rollback copy of the old bundle until the next successful run. Inspect cask install hooks first. Do not launch the updated app.
 - **CLI and runtime packages (not databases):** use the existing package manager, stay on the installed major or language branch (Node 22 → 22.x, Python 3.11 → 3.11.x), and install only the affected package plus required dependencies. Do a dry run first. With Homebrew, set `HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1`. Do not change tap trust.
+- **Linux system packages** (dpkg, rpm, pacman, apk) need sudo to update, so they are always report-only. Give the exact package-manager command in the report.
 - **Global Python packages** outside project virtualenvs: keep the same interpreter and update only to a fixed release compatible with it. Never overwrite a package-manager-owned package with pip. If an end-of-life interpreter cannot run the fix, flag it for the user; never uninstall it.
 
 Never:
@@ -80,3 +83,7 @@ Lead with what changed and what still needs the user. Use these sections and omi
 - **Coverage / errors**
 
 Include the number of items checked, links to primary advisories for real findings, the report path, and a Low/Medium/High risk with a one-line blast radius. Say whether each version came from this machine, a repo, or the live deployment. Do not list incidents that do not affect the user. If everything is clear, one short paragraph is enough.
+
+## 5. Notify (only if `notify` is true)
+
+Last, run `python3 -I <skill>/scripts/check.py notify <summary>` once, also when the run failed or stopped early. Write the summary yourself: counts and the report folder name only, for example `2 need you, 1 updated, coverage OK - 2026-11-09T150000Z` or `FAILED: COVERAGE LOST pwn.watch`. Never put feed or advisory text in it. If it prints `UNKNOWN`, mention that under Coverage / errors.

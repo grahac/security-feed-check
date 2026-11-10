@@ -104,6 +104,33 @@ class ProbeTest(unittest.TestCase):
         self.assertTrue(check.run(["no-such-binary-xyz"]).startswith("UNKNOWN (not on PATH"))
         self.assertEqual(check.run(["sh", "-c", "echo oops >&2; exit 3"]), "UNKNOWN (exit 3: oops)")
 
+    def test_system_packages_reads_whichever_package_db_exists(self):
+        which, run = check.shutil.which, check.run
+        try:
+            check.shutil.which = lambda c: "/usr/bin/pacman" if c == "pacman" else None
+            check.run = lambda argv: "openssl 3.5.1-1\nzlib 1.3-2"
+            self.assertEqual(check.system_packages(), [("pacman", "openssl 3.5.1-1;zlib 1.3-2")])
+            check.shutil.which = lambda c: None
+            self.assertTrue(check.system_packages()[0][1].startswith("UNKNOWN"))
+        finally:
+            check.shutil.which, check.run = which, run
+
+    def test_notify_passes_cleaned_text_as_an_argument(self):
+        calls, run = [], check.run
+        try:
+            check.run = lambda argv: calls.append(argv) or ""
+            with contextlib.redirect_stdout(io.StringIO()):
+                check.notify('2 need you "; `x` $(y) ~', plat="darwin")
+                check.notify("all clear", plat="linux")
+        finally:
+            check.run = run
+        mac, linux = calls
+        self.assertEqual(mac[0], "osascript")
+        self.assertFalse(set(mac[-1]) & set('"`$;~'))  # text is the last argv item, stripped of shell/AppleScript chars
+        self.assertTrue(mac[-1].startswith("2 need you"))
+        self.assertTrue(all("need you" not in a for a in mac[:-1]))  # never spliced into the script itself
+        self.assertEqual(linux, ["notify-send", "Security feed check", "all clear"])
+
     def test_git_show_separates_missing_file_from_git_failure(self):
         repo = tempfile.mkdtemp()
         git = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True)
