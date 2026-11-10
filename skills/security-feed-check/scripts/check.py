@@ -6,6 +6,7 @@
   check.py --commit     record what was reported in seen.json
   check.py inventory    print installed versions on this machine + what each deployed project ships
                         (runs `git fetch` in each deployed_projects repo; nothing else is written)
+  check.py notify TEXT  post one local desktop notification (macOS: osascript; Linux: notify-send)
 
 Config and state live in $SECURITY_FEED_CHECK_HOME (default ~/.config/security-feed-check):
 watchlist.json (copy assets/watchlist.example.json) and seen.json.
@@ -179,6 +180,31 @@ def lock_versions(text):
     return ";".join(f"{n} {v}" for n, v in sorted(found))
 
 
+SYSTEM_PACKAGE_TOOLS = (("dpkg", ["dpkg-query", "-W", "-f=${Package} ${Version}\n"]),
+                        ("rpm", ["rpm", "-qa", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\n"]),
+                        ("pacman", ["pacman", "-Q"]),
+                        ("apk", ["apk", "info", "-v"]))
+
+
+def system_packages():
+    """Linux distro packages from whichever package databases exist; UNKNOWN if none does."""
+    found = [(name, ";".join(run(argv).splitlines())) for name, argv in SYSTEM_PACKAGE_TOOLS if shutil.which(argv[0])]
+    return found or [("system packages", "UNKNOWN (no dpkg, rpm, pacman or apk found)")]
+
+
+def notify(text, plat=sys.platform):
+    """One local desktop notification. The text goes in as an argument, never into a shell or script."""
+    text = re.sub(r"[^\w .,:()/+-]", "", text)[:200]
+    title = "Security feed check"
+    if plat == "darwin":
+        argv = ["osascript", "-e", "on run argv", "-e",
+                f'display notification (item 1 of argv) with title "{title}"', "-e", "end run", text]
+    else:
+        argv = ["notify-send", title, text]
+    out = run(argv)
+    print(out if out.startswith("UNKNOWN") else f"notified: {text}")
+
+
 def inventory():
     wl = load_watchlist()
     print("## This machine")
@@ -191,6 +217,9 @@ def inventory():
         print("apps:", sh("for a in /Applications/*.app \"$HOME\"/Applications/*.app; do [ -e \"$a\" ] || continue; "
                           "v=$(defaults read \"$a/Contents/Info.plist\" CFBundleShortVersionString 2>/dev/null); "
                           "echo \"$a $v\"; done | tr '\\n' ';'"))
+    if sys.platform.startswith("linux"):
+        for name, out in system_packages():
+            print(f"{name}:", out)
     print("brew:", ";".join(run(["brew", "list", "--versions"]).splitlines()))
     print("npm -g:", sh("npm ls -g --depth=0 2>/dev/null | tail -n +2 | tr '\\n' ';'"))
 
@@ -226,7 +255,9 @@ def inventory():
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if "inventory" in args:
+    if args[:1] == ["notify"]:
+        notify(" ".join(args[1:]))
+    elif "inventory" in args:
         inventory()
     else:
         check("--all-live" in args, "--commit" in args)
