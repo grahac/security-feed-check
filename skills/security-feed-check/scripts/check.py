@@ -12,7 +12,7 @@ watchlist.json (copy assets/watchlist.example.json) and seen.json.
 """
 import glob, json, os, platform, re, shutil, subprocess, sys, urllib.request
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date, datetime, timezone
 
 HOME = os.path.expanduser(os.environ.get("SECURITY_FEED_CHECK_HOME", "~/.config/security-feed-check"))
 WATCHLIST = os.path.join(HOME, "watchlist.json")
@@ -105,6 +105,10 @@ def check(all_live, commit):
     if is_example(wl):
         print("EXAMPLE WATCHLIST: tags and keywords are the unedited example, so pwn.watch coverage is generic, "
               "not this machine's stack. Add what you run to the watchlist.")
+    age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(data["updatedAt"].replace("Z", "+00:00"))).total_seconds() / 3600
+    if age_h > 24:
+        print(f"STALE FEED: pwn.watch data is {age_h:.0f}h old (updated {data['updatedAt'][:16]}Z). "
+              "Incidents published since then are missing from this run.")
     print(f"pwn.watch feed updated {data['updatedAt'][:16]}Z · {len(incidents)} incidents · "
           f"{len(matched)} match watchlist · {len(live)} live · {len(new)} new/updated since last run\n")
     print("## pwn.watch: new or updated matches" + (" (first run: everything counts as new)" if not seen else ""))

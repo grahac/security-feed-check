@@ -3,6 +3,7 @@ import contextlib, io, json, os, subprocess, sys, tempfile, unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check
+from datetime import datetime, timedelta, timezone
 
 INC = {"slug": "s1", "title": "Node.js HTTP smuggling", "product": "Node.js", "tags": ["node"], "status": "live",
        "severity": "high", "patchStatus": "patched", "updatedAt": "2026-11-01T00:00:00Z",
@@ -15,8 +16,9 @@ RSS = """<rss><channel>
 </channel></rss>"""
 
 
-def feeds(incidents, rss=RSS):
-    pwn = json.dumps({"updatedAt": "2026-11-09T00:00:00Z", "incidents": incidents}).encode()
+def feeds(incidents, rss=RSS, updated=None):
+    updated = updated or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pwn = json.dumps({"updatedAt": updated, "incidents": incidents}).encode()
     return lambda url: pwn if url == check.INCIDENTS_URL else rss.encode()
 
 
@@ -88,6 +90,12 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("EXAMPLE WATCHLIST", self.run_check(feeds([INC])))
         json.dump(json.load(open(check.EXAMPLE)), open(check.WATCHLIST, "w"))
         self.assertIn("EXAMPLE WATCHLIST", self.run_check(feeds([INC])))
+
+
+    def test_stale_pwn_watch_feed_is_flagged(self):
+        self.assertNotIn("STALE FEED", self.run_check(feeds([INC])))
+        self.assertIn("STALE FEED: pwn.watch data is 48h old", self.run_check(feeds([INC], updated=(
+            datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ"))))
 
 
 class ProbeTest(unittest.TestCase):
