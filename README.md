@@ -2,6 +2,8 @@
 
 A daily "does any new vulnerability affect me?" check for [Claude Code](https://claude.com/claude-code) and [Codex](https://github.com/openai/codex).
 
+> **Beta.** This depends on two third-party feeds, pwn.watch and Cloudflare Radar Zero Wire, that this project does not control. If either feed stops updating or goes away, coverage drops; the check says so (`STALE FEED`, `COVERAGE LOST`) rather than reporting all clear. Treat it as an extra signal, not your only one.
+
 It reads two vulnerability feeds, compares them with what is actually installed on your machine and in your deployed projects, and reports only what affects you, each with an exact fix.
 
 - **[pwn.watch](https://pwn.watch)**: a broad incident feed with affected and fixed versions, filtered by your watchlist.
